@@ -1,0 +1,155 @@
+---
+title: "Loan Prediction"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+###Loading the Dataset
+
+```{r}
+library(caret)
+setwd("D:/Datasets")
+loan_data_train<-read.csv("loan_prediction_train.csv")
+head(loan_data_train)
+```
+
+
+###Dataset Structure and Summary
+
+```{r}
+str(loan_data_train)
+summary(loan_data_train)
+```
+
+###Relationship between Variables
+
+```{r fig.width=12, fig.height=8}
+library(gridExtra)
+g1<-qplot(loan_data_train$Loan_Status,loan_data_train$LoanAmount,xlab = "Loan Status",ylab="Loan Amount", main = "Relationship between Loan Status and Loan Amount")
+g2<-qplot(loan_data_train$Loan_Status,loan_data_train$ApplicantIncome,xlab = "Loan Status",ylab="Applicant Income", main = "Relationship between Loan Status and Applicant Income")
+g3<-qplot(loan_data_train$Loan_Status,loan_data_train$CoapplicantIncome,xlab = "Loan Status",ylab="Coapplicant Income", main = "Relationship between Loan Status and Coapplicant Income")
+g4<-qplot(loan_data_train$Gender,loan_data_train$LoanAmount,xlab = "Gender",ylab="Loan Amount", main = "Relationship between Gender and Loan Amount")
+g5<-qplot(loan_data_train$Married,loan_data_train$LoanAmount,xlab = "Gender",ylab="Loan Amount", main = "Relationship between Marital Status and Loan Amount")
+g6<-qplot(loan_data_train$Self_Employed,loan_data_train$LoanAmount,xlab = "Employment Status",ylab="Loan Amount", main = "Relationship between Employment Status and Loan Amount")
+g7<-qplot(loan_data_train$Education,loan_data_train$LoanAmount,xlab = "Education Status",ylab="Loan Amount", main = "Relationship between Education Status and Loan Amount")
+g8<-qplot(loan_data_train$Loan_Amount_Term,loan_data_train$LoanAmount,xlab = "Loan Amount Term",ylab="Loan Amount", main = "Relationship between Loan Amount Term and Loan Amount")
+grid.arrange(g1,g2,g3,g4,g5,g6,g7,g8,ncol=2,nrow=4)
+```
+
+
+###Histogram of Numeric Variables
+
+```{r fig.width=12, fig.height=8} 
+library(ggplot2)
+library(purrr)
+library(tidyr)
+loan_data_train %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_histogram()
+```
+
+
+
+###Identifying Missing Values
+
+```{r fig.width=12, fig.height=8}
+library(VIM)
+aggr(loan_data_train, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(data), 
+cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+```
+
+
+###Imputing Missing Values
+
+```{r}
+summary(loan_data_train$Loan_Amount_Term)
+x<-is.na(loan_data_train$Loan_Amount_Term)
+loan_data_train[x,]$Loan_Amount_Term=360
+summary(loan_data_train$Loan_Amount_Term)
+```
+
+
+```{r}
+summary(loan_data_train$Self_Employed)
+loan_data_train[loan_data_train$Self_Employed=="",]$Self_Employed="No"
+summary(loan_data_train$Self_Employed)
+```
+```{r}
+summary(loan_data_train$Gender)
+loan_data_train[loan_data_train$Gender=="",]$Gender="Male"
+summary(loan_data_train$Gender)
+```
+
+
+```{r}
+summary(loan_data_train$Married)
+loan_data_train[loan_data_train$Married=="",]$Married="Yes"
+summary(loan_data_train$Married)
+```
+
+```{r}
+summary(loan_data_train$Dependents)
+loan_data_train[loan_data_train$Dependents=="",]$Dependents=0
+summary(loan_data_train$Dependents)
+```
+
+
+```{r}
+summary(loan_data_train$Credit_History)
+z<-is.na(loan_data_train$Credit_History)
+loan_data_train[z,]$Credit_History=1
+summary(loan_data_train$Credit_History)
+```
+
+```{r fig.width=12, fig.height=8}
+library(mice)
+tempdata<-mice(loan_data_train,m=1,meth='sample',seed=500)
+tempdata$imp$LoanAmount
+#xyplot(tempdata,Loan_Status~Gender+Married+Dependents+Education+Self_Employed+ApplicantIncome+CoapplicantIncome+Loan_Amount_Term+Credit_History+Property_Area,pch=18,cex=1)
+densityplot(tempdata)
+stripplot(tempdata,pch=20,cex=1.2)
+final_data<-complete(tempdata,1)
+summary(final_data)
+```
+
+
+###Corelation between Numeric Variables
+
+```{r}
+library(corrplot)
+corrplot(cor(final_data[,c(7,8,9)]))
+```
+
+###Treating Categorical Variables
+
+```{r}
+str(final_data)
+final_data$Gender<-droplevels(final_data$Gender)
+final_data$Married<-droplevels(final_data$Married)
+final_data$Dependents<-droplevels(final_data$Dependents)
+final_data$Self_Employed<-droplevels(final_data$Self_Employed)
+final_data$Gender<-sapply(as.character(final_data$Gender), switch, "Female" = 0, "Male" = 1,USE.NAMES = F)
+final_data$Married<-sapply(as.character(final_data$Married), switch, "No" = 0, "Yes" = 1,USE.NAMES = F)
+final_data$Dependents<-sapply(as.character(final_data$Dependents), switch, "0" = 0, "1" = 1,"2" = 2, "3+" = 3,USE.NAMES = F)
+final_data$Self_Employed<-sapply(as.character(final_data$Self_Employed), switch, "No" = 0, "Yes" = 1,USE.NAMES =F)
+final_data$Education<-sapply(as.character(final_data$Education), switch, "Graduate" = 0, "Not Graduate" = 1,USE.NAMES = F)
+final_data$Property_Area<-sapply(as.character(final_data$Property_Area), switch, "Rural" = 0, "Semiurban" = 1,"Urban" = 2,USE.NAMES = F)
+summary(final_data)
+```
+
+
+
+###Writing Data to CSV
+
+```{r}
+write.csv(final_data,"training_data.csv",row.names = FALSE)
+```
+
+
